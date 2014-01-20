@@ -44,7 +44,7 @@ public class FairLock {
 		synchronized(mutex) {
 			QueueNode node;
 			if (!urgentQueue.isEmpty()) {
-				node = (QueueNode) urgentQueue.getFirst();
+				node = (QueueNode) urgentQueue.getLast();
 			} else if (!entryQueue.isEmpty()) {
 				node = (QueueNode) entryQueue.getFirst();
 			} else {

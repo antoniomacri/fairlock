@@ -49,8 +49,7 @@ public class Condition {
 		QueueNode node = (QueueNode) queue.peekFirst();
 		if (node != null) {
 			QueueNode urgentNode = new QueueNode(thisThread);
-			assert (lock.urgentQueue.isEmpty());
-			lock.urgentQueue.add(urgentNode);
+			lock.urgentQueue.addLast(urgentNode);
 			Logger.log("added thread " + thisThread.getName()
 					+ " to the urgent queue");
 			lock.owner = node.thread;
@@ -60,8 +59,8 @@ public class Condition {
 				urgentNode.doWait();
 				assert (lock.owner == thisThread);
 			} finally {
-				assert (lock.urgentQueue.peekFirst() == urgentNode);
-				lock.urgentQueue.pop();
+				assert (lock.urgentQueue.peekLast() == urgentNode);
+				lock.urgentQueue.removeLast();
 				Logger.log("removed thread " + thisThread.getName()
 						+ " from the urgent queue");
 			}

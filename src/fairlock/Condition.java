@@ -41,13 +41,13 @@ public class Condition {
 		QueueNode node = (QueueNode) queue.peekFirst();
 		if (node != null) {
 			QueueNode urgentNode = new QueueNode(thisThread);
-			lock.urgentQueue.add(urgentNode);
+			lock.urgentQueue.addLast(urgentNode);
 			lock.owner = node.thread;
 			node.doNotify();
 			try {
 				urgentNode.doWait();
 			} finally {
-				lock.urgentQueue.pop();
+				lock.urgentQueue.removeLast();
 			}
 		}
 	}

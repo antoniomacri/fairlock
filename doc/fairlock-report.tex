@@ -246,7 +246,7 @@ Si può notare che un thread, prima di acquisire il lock oppure sospendersi perc
 \paragraph{Il metodo \texttt{unlock()}.}
 Anche qui, la prima istruzione eseguita è il controllo sul thread chiamante: viene lanciata un'eccezione di tipo \code|IllegalMonitorStateException| se il thread corrente non detiene il lock (perché il lock è libero, oppure perché è detenuto da un thread diverso).
 
-Si accede quindi alla sezione critica. Se non ci sono thread sospesi né sulla \emph{entry-queue} né sulla \emph{urgent-queue}, allora il monitor viene marcato come libero (\code|owner = null|), senza compiere ulteriori operazioni. Altrimenti bisogna risvegliare un thread tra quelli della \emph{entry-queue} o della \emph{urgent-queue}, privilegiando questi ultimi. In particolare, se l'\emph{urgent-queue} non è vuota, se ne prende il primo elemento, altrimenti si sceglie il primo dall'\emph{entry-queue}. Il thread selezionato viene subito marcato come il detentore del lock, dopodiché viene risvegliato: si segue lo schema con “passaggio del testimone”.
+Si accede quindi alla sezione critica. Se non ci sono thread sospesi né sulla \emph{entry-queue} né sulla \emph{urgent-queue}, allora il monitor viene marcato come libero (\code|owner = null|), senza compiere ulteriori operazioni. Altrimenti bisogna risvegliare un thread tra quelli della \emph{entry-queue} o della \emph{urgent-queue}, privilegiando questi ultimi. In particolare, se l'\emph{urgent-queue} non è vuota, se ne prende l'ultimo elemento (essa viene infatti gestita in modalità LIFO), altrimenti si sceglie il primo dall'\emph{entry-queue}. Il thread selezionato viene subito marcato come il detentore del lock, dopodiché viene risvegliato: si segue lo schema con “passaggio del testimone”.
 
 È chiara a questo punto l'utilità della classe \code|QueueNode|: essa serve anche a memorizzare l'identificatore del thread che ha creato l'oggetto, in modo da segnarlo come il proprietario del lock. Se la classe \code|FairLock| mantenesse una semplice variabile booleana a indicare se il monitor è occupato o no, un classico semaforo binario sarebbe sufficiente. Ma dal momento che si vuole tener traccia in ogni momento anche del thread che detiene il lock, creiamo appositamente una nuova classe.
 
@@ -298,7 +298,7 @@ Il listato~\ref{lst:condition-schema} mostra la struttura generale della classe 
 All'interno del metodo \code|await()|, dopo il solito controllo sulla correttezza dell'invocazione, si crea un nuovo oggetto \code|QueueNode| relativo al thread corrente, lo si aggiunge alla coda FIFO di thread sospesi sulla variabile condizione e si sospende effettivamente il thread, dopo aver rilasciato il lock. Il blocco \code|try-finally| serve, qui come nella \code|FairLock.lock()|, ad avere la garanzia di rimuovere il nodo dalla coda dei thread sospesi. Le operazioni sulla coda vanno svolte in mutua esclusione perché, in caso di interruzione del thread corrente, un'eccezione di \code|InterruptedException| potrebbe esser sollevata in qualsiasi istante, indipendentemente dallo stato del lock e da chi lo detiene.
 
 \paragraph{Il metodo \texttt{signal()}.}
-L'implementazione della \code|signal()| segue la semantica \emph{signal-and-urgent-wait}. Se non ci sono thread sospesi sulla variabile condizione (ovvero se il test \code|node != null| è falso), allora non viene eseguita alcuna operazione. Altrimenti, si riattiva il primo thread bloccato, eseguendo la \code|doNotify()| sul suo semaforo (equivalente a una \code|V()|), e si sospende il thread corrente nella \emph{urgent-queue}. Si noti anche qui il “passaggio del testimone”: prima di risvegliare il thread bloccato, non si rilascia il lock, ma anzi si assegna il possesso del lock al thread segnalato.
+L'implementazione della \code|signal()| segue la semantica \emph{signal-and-urgent-wait}. Se non ci sono thread sospesi sulla variabile condizione (ovvero se il test \code|node != null| è falso), allora non viene eseguita alcuna operazione. Altrimenti, si riattiva il primo thread bloccato, eseguendo la \code|doNotify()| sul suo semaforo (equivalente a una \code|V()|), e si sospende il thread corrente in fondo alla \emph{urgent-queue}. Si noti anche qui il “passaggio del testimone”: prima di risvegliare il thread bloccato, non si rilascia il lock, ma anzi si assegna il possesso del lock al thread segnalato.
 
 
 \section{La classe di utilità \texttt{QueueNode}}
@@ -335,6 +335,7 @@ Scegliere uno fra i vari problemi di sincronizzazione visti anche a lezione e ch
 Tutti i test sono stati eseguiti con una versione leggermente modificata delle classi presentate nei paragrafi precedenti. In particolare, è stato fatto uso del costrutto \code|assert| (introdotto in Java 1.4) e sono state aggiunte istruzioni per mostrare alcune informazioni di debug (sfruttando la funzionalità di una semplice classe \code|Logger|, scritta appositamente, di produrre lo \emph{stack-trace}). Per comodità, tali modifiche alle classi \code|FairLock| e \code|Condition| sono evidenziate (usando il formato \texttt{diff}) in coda a questo documento nei listati~\ref{lst:fairlock-test} e \ref{lst:condition-test}.
 
 I test sono stati effettuati sia usando una classica mailbox, con un numero variabile di thread produttori e thread consumatori, sia uno “scambiatore”, così come presentato alla soluzione dell'esercizio E2.2.\footnote{Tale soluzione è disponibile all'indirizzo \url{http://www.ateneonline.it/ancilotti2e/studenti/isbn6358-0_E2.2.pdf}.}
+Si è inoltre aggiunto un test “counter” per verificare che il risveglio dei processi nella \emph{urgent-queue} rispetti il criterio LIFO.
 
 Per quanto riguarda la mailbox, l'unica differenza tra la soluzione che fa uso della classe \code|FairLock| e la soluzione che si affida al \code|ReentrantLock|, e agli altri strumenti offerti dalle versioni recenti di Java, è l'uso dell'istruzione \code|if| in luogo del ciclo \code|while|.
 
@@ -375,6 +376,8 @@ Realizza uno “scambiatore” che fa uso del \code|ReentrantLock| di Java e imp
 Realizza uno “scambiatore” che fa uso del \code|FairLock| e implementa l'interfaccia \code|IScambiatore|.
 \item \file{ScambiatoreThread.java}\par
 Implementa un thread che richiede uno scambio a un \code|IScambiatore|.
+\item \file{Counter.java}\par
+Implementa un oggetto contatore e il relativo thread per testare l'uso di \code|signal()| annidate.
 \item \file{Logger.java}\par
 Classe di utilità, permette di mostrare a video lo \emph{stack-trace} (usata per motivi di debugging).
 \item \file{Main.java}\par

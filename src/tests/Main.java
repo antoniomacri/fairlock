@@ -45,6 +45,9 @@ public class Main {
 		System.out.println();
 		// Logger.showStackTrace = true;
 		testScambiatore(scambiatore);
+
+		System.out.println();
+		testCounter(new Counter());
 	}
 
 	private static void testMailboxSingleThread(IMailbox mailbox) {
@@ -104,5 +107,23 @@ public class Main {
 			System.out.println("Interrupted.");
 		}
 		System.out.println("Completed testScambiatore.");
+	}
+
+	private static void testCounter(Counter counter) {
+		System.out.println("Starting testCounter...");
+		Counter.Thread counters[] = new Counter.Thread[Counter.limit];
+		for (int i = 0; i < Counter.limit; i++) {
+			(counters[i] = new Counter.Thread(counter)).start();
+		}
+		System.out.println("All threads created.");
+		try {
+			System.out.println("Waiting for threads to complete...");
+			for (int i = 0; i < Counter.limit; i++) {
+				counters[i].join();
+			}
+		} catch (InterruptedException e) {
+			System.out.println("Interrupted.");
+		}
+		System.out.println("Completed testCounter.");
 	}
 }
