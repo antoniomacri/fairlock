@@ -1,0 +1,407 @@
+% !TeX encoding = UTF-8
+% !TeX program = pdflatex -shell-escape
+
+\nonstopmode
+\overfullrule=10pt
+
+\documentclass[a4paper,twoside]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english,italian]{babel}
+
+\usepackage{fourier}
+\usepackage[scaled=0.84]{beramono}
+\renewcommand\sfdefault{iwona}
+
+\usepackage{caption}
+\usepackage{enumitem}
+\usepackage[fleqn]{amsmath}
+\usepackage{listings}
+\usepackage[svgnames]{xcolor}
+\usepackage{hyperref}
+\usepackage[italian]{varioref}
+\usepackage{microtype}
+
+\hyphenation{thread}
+
+\frenchspacing
+\captionsetup{labelfont={bf,sf},font=small,format=hang,textformat=period}
+\setlist{noitemsep}
+\hypersetup{bookmarksopen, pdfstartview={XYZ null null 0.9}}
+\hypersetup{colorlinks, urlcolor=Maroon, linkcolor=blue}
+
+\newcommand*\file{\texttt}
+\newcommand\code{\lstinline[basicstyle=\normalsize\ttfamily]}
+\lstset{language=Java, morekeywords=assert}
+\lstset{belowcaptionskip=4pt}
+%\lstset{keywordstyle=\bfseries\color{NavyBlue}, stringstyle=\color{DarkRed}}
+\lstset{basicstyle=\footnotesize\ttfamily, tabsize=4, showstringspaces=false}
+\lstset{numbers=left, numberstyle=\tiny, frameround=fttt, frame=trb}
+\addto\captionsitalian{\renewcommand*\lstlistingname{Listato}}
+\lstdefinelanguage{diff}{
+  morecomment=[f][\color{blue}]{@@},
+  morecomment=[f][\bfseries\color{red}]-,
+  morecomment=[f][\bfseries\color{Green}]+,
+  morecomment=[f][\color{magenta}]{---},
+  morecomment=[f][\color{magenta}]{+++},
+}
+
+\makeatletter
+\vref@addto\extrasitalian{%
+  \def\reftextfaceafter{\reftextvario{a fronte}{a pagina seguente}}%
+  \def\reftextfaraway#1{a pagina~\pageref{#1}}%
+  \def\reftextafter{a pagina seguente}%
+}
+\pagestyle{myheadings}
+\def\leftpagehead{Progetto di Sisop\hskip0.6em--\hskip0.6em Antonio Macrì}
+\def\sectionmark#1{%
+  \markboth {\leftpagehead}{\ifnum \c@secnumdepth >\z@
+    \thesection.\hskip0.6em
+  \fi #1}}
+\def\subsectionmark#1{%
+  \markboth {\leftpagehead}{\ifnum \c@secnumdepth >\@ne
+    \thesubsection.\hskip0.6em
+  \fi #1}}
+\makeatother
+
+
+\title{%
+  Implementazione della classe \texttt{FairLock}\texorpdfstring{\\}{}
+  e di variabili condizione\texorpdfstring{\\}{}
+  con semantica \emph{signal-and-urgent-wait}}
+\author{Antonio Macrì}
+\hypersetup{
+  pdfauthor = {Antonio Macrì},
+  pdftitle = {Implementazione della classe FairLock e di variabili
+              condizione con semantica signal-and-urgent-wait},
+}
+\def\day{18}
+\def\month{1}
+\def\year{2014}
+
+\begin{document}
+\maketitle
+\vspace*{\stretch{1}}
+\tableofcontents
+\vspace*{\stretch{3}}
+\null
+\clearpage
+
+
+\part*{Prima parte}
+\addcontentsline{toc}{part}{Prima parte}
+\section{\textsl{Specifiche}}
+
+\begingroup
+\slshape
+La prima parte del progetto consiste nella implementazione del meccanismo di sincronizzazione tipico dei monitor (mutua esclusione e variabili condition) che, con riferimento alla primitiva \texttt{signal}, utilizzi la semantica \emph{signal-and-urgent}.
+
+Per l'implementazione del meccanismo devono essere utilizzati esclusivamente i costrutti di sincronizzazione offerti da Java 1.4.2 (e cioè i metodi e/o i blocchi \texttt{synchronized} e i metodi \texttt{wait()}, \texttt{notify()} e \texttt{notifyAll()} offerti dalla classe \texttt{Object}).
+
+In altri termini, si chiede di implementare un meccanismo simile a quello direttamente offerto dalle versioni più recenti di Java ma con una diversa semantica. In particolare, il meccanismo direttamente offerto dalle versioni più recenti di Java consente di utilizzare oggetti di tipo \texttt{Lock} per programmare esplicitamente la mutua esclusione fra le esecuzioni dei metodi di accesso ad un oggetto condiviso fra più threads. Inoltre, oggetti di tipo \texttt{Lock} consentono anche di dichiarare variabili di tipo \texttt{Condition} su cui eseguire le operazioni primitive \texttt{c.await()}, \texttt{c.signal()} e \texttt{c.signalAll()} usate rispettivamente per bloccare un thread sulla variabile \texttt{Condition c}, per svegliare un thread bloccato sulla variabile \texttt{Condition c}, o per svegliare tutti i thread sospesi su tale variabile. In questo caso però la semantica offerta da Java è la \emph{signal-and-continue}. Nel progetto, si chiede di fornire un analogo meccanismo cambiando però la semantica offerta, secondo, le specifiche indicate di seguito.
+
+\begin{description}
+\item[REQUISITO N.1] Implementare un meccanismo di mutua esclusione da utilizzare per programmare esplicitamente la mutua esclusione fra le esecuzioni dei metodi di accesso ad un oggetto condiviso fra più threads. Cioè, a differenza della mutua esclusione implicita offerta dai blocchi \texttt{synchronized}, la garanzia di mutua esclusione è demandata al programmatore e cioè programmata esplicitamente. In particolare: implementare la classe \texttt{FairLock} che offra i due metodi, \texttt{lock()} ed \texttt{unlock()} da usare per programmare esplicitamente gli accessi esclusivi ad un oggetto condiviso.
+
+\item [REQUISITO N.2] a differenza del \emph{wait set} di un oggetto (contenente i thread sospesi per mutua esclusione nell'accesso ad un blocco \texttt{synchronized}) che, come noto, non prevede nessun tipo di gestione, i thread che si sospendono nel tentativo di accedere ad un oggetto condiviso eseguendo il metodo \texttt{mutex.lock()} (dove \texttt{mutex} rappresenta un'istanza della classe \texttt{FairLock} utilizzata per garantire la mutua esclusione negli accessi all'oggetto condiviso) devono essere risvegliati in ordine FIFO.
+
+\item [REQUISITO N.3] implementare la classe \texttt{Condition} che offre i metodi \texttt{await()} e \texttt{signal()} usati, rispettivamente, per sospendere un thread su una variabile \texttt{Condition} e per risvegliare il primo che si è sospeso (se c'è) fra i thread presenti sulla variabile \texttt{Condition}. Al solito, se nessun thread è sospeso sulla variabile \texttt{Condition}, il metodo \texttt{signal()} non esegue nessuna operazione. Quindi la \texttt{Condition} deve fornire una coda FIFO di thread sospesi. La semantica della \texttt{signal} deve essere la \emph{signal-and-urgent}. Per questo motivo, non è prevista l'implementazione del metodo \texttt{signalAll()}.
+
+\item [REQUISITO N.4] Come noto dalla teoria dei monitor, una variabile \texttt{Condition} è sempre locale ad un monitor e le operazioni primitive \texttt{await()} e \texttt{signal()} possono essere quindi utilizzate solo all'interno dei metodi di accesso ad un monitor. Ciò implica che ogni istanza della classe \texttt{Condition} deve essere intrinsecamente legata ad un \texttt{lock} (oggetto della classe \texttt{FairLock}). Per questo motivo la classe \texttt{FairLock} deve offrire, oltre ai metodi \texttt{lock()} ed \texttt{unlock()} prima visti, anche il metodo \texttt{newCondition()}. In questo modo, se ad esempio \texttt{mutex} è un istanza della classe \texttt{FairLock}, l'operazione \texttt{mutex.newCondition()} restituisce un'istanza di \texttt{Condition} legata allo specifico oggetto \texttt{mutex} di tipo \texttt{Lock}.
+\end{description}
+\endgroup
+
+
+
+\section{Presentazione del lavoro}
+
+Nel contesto in cui si inquadra questo progetto, la \emph{fairness} è intesa come una soluzione al problema della \emph{starvation}, ovvero alla condizione in cui un processo può venire ritardato per un tempo indefinito. In Java questo può accadere per due motivi (oltre a questioni legate alla priorità dei processi):
+%
+\begin{enumerate}
+\item quando un thread rimane in attesa di entrare in un blocco/metodo sincronizzato, a causa di altri processi che lo precedono;
+\item quando un thread si è sospeso su una \texttt{wait()} e vengono risvegliati sempre altri thread.
+\end{enumerate}
+%
+I blocchi sincronizzati in Java infatti non danno alcuna garanzia sull'ordine seguito dai thread in attesa nell'\emph{entry-set}, quindi è teoricamente possibile che un thread rimanga bloccato indefinitamente. Neanche il metodo \texttt{notify()} offre garanzie su quale thread venga risvegliato, perciò è teoricamente possibile che un thread rimanga sempre in attesa perché viene sempre preceduto da altri thread.
+
+Se i metodi sincronizzati che acquisiscono il lock sono brevi, come per esempio il metodo \code|lock()| della classe \code|FairLock| presentata in questo documento, è verosimile che un thread che attende di acquisire il lock ed entrare nella sezione critica rimanga bloccato per la maggior parte del tempo non in attesa di eseguire il metodo \texttt{lock()} in sé, ma sulla \texttt{wait()} in esso contenuta.
+
+La classe \code|FairLock|, come direttamente o indirettamente tutti i meccanismi di sincronizzazione programmati esplicitamente, si basano necessariamente su blocchi sincronizzati, sui quali non è possibile intervenire per migliorare la \emph{fairness}. Nonostante ciò, si può comunque lavorare sulla \texttt{wait()} e far sì che l'attesa nell'accesso a un lock esplicito e l'attesa su una variabile condizione seguano una politica FIFO, garantendo così l'assenza di starvation.
+
+Come sarà illustrato più avanti, ciò avviene facendo sì che ciascun thread invochi una \texttt{wait()} su un oggetto separato: in questo modo un solo thread è in attesa su un oggetto e di conseguenza è possibile attivare selettivamente uno specifico thread.
+
+Per implementare la classe \code|FairLock| si è sviluppato un \emph{package} Java costituito di tre classi suddivise in altrettanti file:
+\begin{itemize}
+\item \code|FairLock.java|: contiene la realizzazione della classe principale;
+\item \code|Condition.java|: contiene la realizzazione delle variabili condizione che vanno usate insieme alla classe \code|FairLock|;
+\item \code|QueueNode.java|: una classe di utilità richiesta per implementare le due classi precedenti.
+\end{itemize}
+
+Le prime due classi sono pubbliche, accessibili esternamente al \emph{package}, mentre la classe \code|QueueNode| è \emph{package-private}. Inoltre, il costruttore della classe \code|Condition| è anch'esso \emph{package-private} in quando istanze di tale classe devono essere create sempre e solamente tramite un'istanza della classe \code|FairLock|. Come illustrato più avanti, anche altri metodi hanno visibilità ridotta, in quanto si è scelto come regola generale di mantenere per ciascun identificatore la minima visibilità necessaria.
+
+
+
+\section{La classe \texttt{FairLock}}
+
+\begin{lstlisting}[
+  float=tb, caption={Struttura generale della classe \texttt{FairLock}},
+  label={lst:fairlock-schema},
+]
+public class FairLock {
+	Thread owner = null;
+	private final Object mutex = new Object();
+	private ArrayDeque entryQueue = new ArrayDeque();
+	ArrayDeque urgentQueue = new ArrayDeque();
+
+	boolean isLocked() {
+		return owner != null;
+	}
+
+	public void lock() throws InterruptedException {
+		...
+		synchronized(mutex) { ... }
+		...
+	}
+
+	public void unlock() {
+		...
+		synchronized(mutex) { ... }
+		...
+	}
+
+	public Condition newCondition() {
+		return new Condition(this);
+	}
+}
+\end{lstlisting}
+
+\paragraph{Struttura e criteri generali.}
+Nel listato~\ref{lst:fairlock-schema} viene mostrata la struttura generale della classe \code|FairLock|, con la dichiarazione delle variabili membro. L'implementazione dei metodi \code|lock()| e \code|unlock()| è invece riportata più avanti nei listati~\ref{lst:fairlock-lock} e~\ref{lst:fairlock-unlock}. Nei capoversi seguenti, prima di illustrarne in dettaglio il funzionamento, si enunciano alcuni criteri generali seguiti durante le fasi di progetto e implementazione della classe \code|FairLock| (e, per riflesso, anche delle altre due).
+
+Per motivi di debugging, la classe \code|FairLock| tiene traccia non solo dello stato del lock (libero o occupato), ma anche del thread che in ciascun istante lo occupa. Viene perciò dichiarata una variabile \code|Thread owner| che contiene di volta in volta il thread che possiede il lock (o \code|null| se il lock è libero). Per maggiore espressività, viene anche definito il metodo \code|isLocked()|. Se il thread che ha chiamato la \code|lock()| cerca di invocarla nuovamente, viene lanciata un'eccezione di tipo \code|IllegalMonitorStateException| (il lock implementato, infatti, non è \emph{rientrante}); in maniera complementare, viene lanciata un'eccezione dello stesso tipo se un thread che non detiene il lock cerca di rilasciarlo invocando il metodo \code|unlock()|.
+
+I metodi fondamentali implementati dalla classe sono \code|lock()| e \code|unlock()|. Il primo può sollevare eccezioni di tipo \code|InterruptedException|: si è preferito non catturare tale eccezione all'interno del metodo, ma propagarla, in modo da dare all'utente la possibilità di gestirla secondo le proprie necessità.
+
+I due metodi non sono dichiarati \code|synchronized|: si è preferito usare dei \emph{blocchi} sincronizzati anche laddove non erano necessari (nel metodo \code|unlock()| per esempio), e in particolare specificare la sincronizzazione non su \code|this|, bensì su un oggetto privato assegnato alla variabile membro \code|mutex|. In questo modo, se da un lato si perde (da parte dell'utente della classe) l'evidenza dei vincoli di sincronizzazione, si mette tuttavia la classe in sicurezza rispetto a usi erronei della stessa (cioè rispetto a codice utente che potrebbe usare da sé il monitor associato a \code|this|).
+
+\lstinputlisting[
+  float=tbp,
+  caption={La classe \texttt{FairLock}: implementazione del metodo \texttt{lock()}},
+  firstline=15, lastline=37,
+  basicstyle=\ttfamily\footnotesize, label={lst:fairlock-lock},
+]{../src/fairlock/FairLock.java}
+
+\paragraph{Il metodo \texttt{lock()}.}
+Come anticipato, all'interno del metodo \code|lock()|, si esegue per prima cosa un controllo di correttezza a fini di debugging: se il lock è già detenuto dal thread corrente, viene lanciata un'eccezione di \code|IllegalMonitorStateException| (\emph{unchecked}). Infatti la classe \code|FairLock| implementa un lock non rientrante, ovvero che non permette di eseguire coppie di \code|lock()|/\code|unlock()| annidate.
+
+Viene dichiarata una variabile locale di tipo \code|QueueNode|, sulla quale il thread corrente potrà bloccarsi (qualora il lock sia occupato). La classe \code|QueueNode| rappresenta sostanzialmente un semaforo evento, ovvero un semaforo binario inizializzato a zero, con una semplice aggiunta che sarà illustrata a breve.
+
+Nelle righe seguenti, si entra dunque in un blocco sincronizzato per operare in mutua esclusione sulle strutture dati del monitor. Si controlla immediatamente lo stato del lock: se è libero, allora viene marcato come occupato dal thread corrente e si restituisce il controllo al chiamante, senza alcuna ulteriore operazione.
+
+Se invece il monitor è già occupato, allora bisogna bloccare il thread corrente. Si crea un oggetto di tipo \code|QueueNode|, assegnandolo alla variabile \code|node| precedentemente dichiarata, e lo si accoda all'\emph{entry-queue} secondo la politica FIFO (si inserisce in coda e si preleva dalla testa).
+
+È possibile a questo punto uscire dalla mutua esclusione e sospendere il thread corrente sul nodo/semaforo appena creato invocandone il metodo \code|doWait()|. La necessità di racchiudere tale chiamata entro un blocco \code|try-finally| è dovuta a due motivi: da un lato, siccome il thread corrente è appena stato svegliato, bisogna rimuovere il relativo nodo dall'\code|entryQueue|; inoltre, poiché \code|doWait()| può sollevare un'\code|InterruptedException|, che va propagata al chiamante, è necessario comunque trattarla localmente, rimuovendo ugualmente il nodo dalla coda (altrimenti porterebbe il monitor in uno stato inconsistente). Chiaramente, prima di intervenire sulla coda, essendo questa una risorsa astratta implementata non atomicamente (i suoi metodi non sono \emph{thread-safe}) è necessario riacquisire il \code|mutex|.
+
+All'uscita del blocco \code|try-finally| le strutture dati sono nuovamente consistenti e, poiché il thread corrente è stato risvegliato secondo lo schema con passaggio del testimone, come sarà mostrato più avanti, esso detiene già il lock.
+
+In conclusione, per ciascun thread che invoca la \code|lock()| quando il monitor è occupato, viene creato un nuovo oggetto di tipo \code|QueueNode|. Il thread che chiamerà la \code|unlock| preleverà l'oggetto in cima alla coda e ne invocherà il metodo \code|doNotify()|, in modo da svegliare il thread in attesa. Viene dunque svegliato un solo thread, in maniera mirata, anziché tutti i thread come accadrebbe usando una \code|notifyAll()|, o uno qualsiasi come farebbe la \code|notify()|: in questo modo si realizza l'effettiva implementazione del criterio di \emph{fairness} sull'entry-queue del monitor.
+
+Se al posto dell'oggetto di tipo \code|QueueNode| si dichiarasse un semplice \code|Object o|, usandone (dentro un blocco \texttt{synchronized(o)}) i metodi \code|o.wait()| e \code|o.notify()|, potrebbe sorgere un problema cosiddetto di \emph{missed notify} (\emph{segnalazione persa}). Si supponga infatti che il thread che si sospende (il futuro thread segnalato) subisca preemption, all'interno della \code|lock()|, appena prima della \code|o.wait()|: se a questo punto andasse in esecuzione il thread segnalante e invocasse, nella \code|unlock()|, la \code|o.notify()|, quest'ultima troverebbe la \emph{wait-queue} vuota e non sortirebbe quindi alcun effetto; quando il thread segnalato riprenderebbe poi l'esecuzione si bloccherebbe erroneamente sulla \code|wait()|. È perciò necessario usare un semaforo evento, quale è implementato da \code|QueueNode|.
+
+Un altro problema potrebbe sorgere se si eseguisse la \code|doWait()| all'interno del blocco sincronizzato su \code|mutex|. Non è possibile, infatti, eseguire chiamate innestate a procedure di monitor (un problema noto anche come di \emph{nested lockout}). Si consideri il codice seguente:
+
+\begin{lstlisting}
+public void lock() {
+    ...
+    synchronized(mutex) {
+        ...
+        synchronized(o) {
+            o.wait();
+        }
+    }
+}
+
+public void unlock() {
+    ...
+    synchronized(mutex) {
+        ...
+        synchronized(o) {
+            o.notify();
+        }
+    }
+}
+\end{lstlisting}
+%
+Quando un thread si sospende sulla \code|o.wait()|, rilascia il blocco sul monitor associato all'oggetto \code|o| stesso, ma quello su \code|mutex| continua a essere occupato. Il thread che esegue la \code|unlock()| rimane sospeso su \code|mutex| e di conseguenza non riesce ad accedere al blocco sincronizzato su~\code|o|, necessario per invocare la \code|o.notify()| e sbloccare il primo thread.
+
+Si può notare che un thread, prima di acquisire il lock oppure sospendersi perché il lock è già occupato, per garantire la consistenza degli stati interni del lock deve eseguire l'accesso al blocco \code|synchronized(mutex)|, ma per esso Java non garantisce alcun tipo di gestione (per esempio FIFO). Su questo meccanismo non è possibile intervenire: tuttavia, tipicamente il tempo in cui un thread rimane in attesa di accedere a quel blocco sincronizzato è nettamente inferiore al tempo di attesa per l'accesso all'oggetto condiviso che si vuole proteggere con il lock (ovvero, al tempo in cui il thread rimane bloccato sulla \code|node.doWait()|), per il quale viene invece garantito dalla classe \code|FairLock| un risveglio in ordine FIFO.
+
+\lstinputlisting[
+  caption={La classe \texttt{FairLock}: implementazione del metodo \texttt{unlock()}},
+  firstline=39, lastline=57,
+  basicstyle=\ttfamily\footnotesize, label={lst:fairlock-unlock},
+]{../src/fairlock/FairLock.java}
+
+\paragraph{Il metodo \texttt{unlock()}.}
+Anche qui, la prima istruzione eseguita è il controllo sul thread chiamante: viene lanciata un'eccezione di tipo \code|IllegalMonitorStateException| se il thread corrente non detiene il lock (perché il lock è libero, oppure perché è detenuto da un thread diverso).
+
+Si accede quindi alla sezione critica. Se non ci sono thread sospesi né sulla \emph{entry-queue} né sulla \emph{urgent-queue}, allora il monitor viene marcato come libero (\code|owner = null|), senza compiere ulteriori operazioni. Altrimenti bisogna risvegliare un thread tra quelli della \emph{entry-queue} o della \emph{urgent-queue}, privilegiando questi ultimi. In particolare, se l'\emph{urgent-queue} non è vuota, se ne prende il primo elemento, altrimenti si sceglie il primo dall'\emph{entry-queue}. Il thread selezionato viene subito marcato come il detentore del lock, dopodiché viene risvegliato: si segue lo schema con “passaggio del testimone”.
+
+È chiara a questo punto l'utilità della classe \code|QueueNode|: essa serve anche a memorizzare l'identificatore del thread che ha creato l'oggetto, in modo da segnarlo come il proprietario del lock. Se la classe \code|FairLock| mantenesse una semplice variabile booleana a indicare se il monitor è occupato o no, un classico semaforo binario sarebbe sufficiente. Ma dal momento che si vuole tener traccia in ogni momento anche del thread che detiene il lock, creiamo appositamente una nuova classe.
+
+Si noti infatti che non è possibile porre semplicemente \code|owner = null| nella \code|unlock()| e poi reimpostare l'\code|owner| all'interno della \code|lock()|. Infatti, se si operasse in questo modo, dopo essere usciti dal blocco sincronizzato nella \code|unlock()| si permetterebbe a un qualsiasi thread che si trovi all'interno della \code|lock()|, in attesa di entrare nel blocco sincronizzato, di trovarlo libero e acquisirlo, violando il criterio della sequenzialità FIFO per gli accessi al monitor.
+
+
+\section{La classe \texttt{Condition}}
+
+\begin{lstlisting}[
+  float=tb, caption={Struttura generale della classe \texttt{Condition}},
+  label={lst:condition-schema},
+  basicstyle=\ttfamily\footnotesize,
+]
+public class Condition {
+	private FairLock lock;
+	private ArrayDeque queue = new ArrayDeque();
+
+	public Condition(FairLock lock) {
+		this.lock = lock;
+	}
+
+	public void await() throws InterruptedException {
+		...
+	}
+
+	public void signal() throws InterruptedException {
+		...
+	}
+}
+\end{lstlisting}
+
+\lstinputlisting[
+  float=tbp,
+  caption={La classe \texttt{Condition}: implementazione del metodo \texttt{await()}},
+  firstline=13, lastline=32,
+  basicstyle=\ttfamily\footnotesize, label={lst:condition-await},
+]{../src/fairlock/Condition.java}
+
+\lstinputlisting[
+  float=tbp,
+  caption={La classe \texttt{Condition}: implementazione del metodo \texttt{signal()}},
+  firstline=34, lastline=53,
+  label={lst:condition-signal},
+]{../src/fairlock/Condition.java}
+
+Il listato~\ref{lst:condition-schema} mostra la struttura generale della classe \code|Condition|, mentre l'implementazione dei metodi \code|await()| e \code|signal()| è riportata nei listati~\ref{lst:condition-await} e~\ref{lst:condition-signal}. Avendo chiarito il funzionamento della \code|FairLock|, si possono ritrovare qui gli stessi schemi di base.
+
+\paragraph{Il metodo \texttt{await()}.}
+All'interno del metodo \code|await()|, dopo il solito controllo sulla correttezza dell'invocazione, si crea un nuovo oggetto \code|QueueNode| relativo al thread corrente, lo si aggiunge alla coda FIFO di thread sospesi sulla variabile condizione e si sospende effettivamente il thread, dopo aver rilasciato il lock. Il blocco \code|try-finally| serve, qui come nella \code|FairLock.lock()|, ad avere la garanzia di rimuovere il nodo dalla coda dei thread sospesi. Le operazioni sulla coda vanno svolte in mutua esclusione perché, in caso di interruzione del thread corrente, un'eccezione di \code|InterruptedException| potrebbe esser sollevata in qualsiasi istante, indipendentemente dallo stato del lock e da chi lo detiene.
+
+\paragraph{Il metodo \texttt{signal()}.}
+L'implementazione della \code|signal()| segue la semantica \emph{signal-and-urgent-wait}. Se non ci sono thread sospesi sulla variabile condizione (ovvero se il test \code|node != null| è falso), allora non viene eseguita alcuna operazione. Altrimenti, si riattiva il primo thread bloccato, eseguendo la \code|doNotify()| sul suo semaforo (equivalente a una \code|V()|), e si sospende il thread corrente nella \emph{urgent-queue}. Si noti anche qui il “passaggio del testimone”: prima di risvegliare il thread bloccato, non si rilascia il lock, ma anzi si assegna il possesso del lock al thread segnalato.
+
+
+\section{La classe di utilità \texttt{QueueNode}}
+
+La classe \code|QueueNode|, il cui codice è riportato per intero nel listato~\ref{lst:queuenode}, è stata realizzata con un triplice scopo:
+\begin{enumerate}
+\item innanzitutto, come spiegato illustrando il funzionamento della \code|lock()|, serve a evitare un problema di \emph{missed notify} qualora venga eseguita la \code|notify()| di un generico \code|Object| prima della rispettiva \code|wait()|;
+\item inoltre, viene usata per conservare l'identificatore del thread associato al nodo, in modo da marcarlo immediatamente come il detentore del lock non appena il thread segnalante lo rilascerebbe;
+\item infine, serve come protezione contro \emph{risvegli spuri}.
+\end{enumerate}
+
+\lstinputlisting[
+  float=tbp, caption={La classe \texttt{QueueNode}},
+  basicstyle=\ttfamily\footnotesize, label={lst:queuenode},
+]{../src/fairlock/QueueNode.java}
+
+Per risolvere il primo problema, basta implementare un semaforo evento, in cui si mantiene una variabile booleana che indica se l'evento è stato segnalato e consumato. Il secondo problema viene invece risolto dichiarando una variabile membro \code|thread|: come si può notare essa non ha modificatori di accesso (è \emph{package-private} e non privata) in quanto deve essere accessibile dalle classi \code|FairLock| e \code|Condition|.
+
+L'ultimo punto trova riscontro, nell'implementazione della \code|QueueNode|, con l'uso di un ciclo \code|while|: bisogna infatti tener conto dell'ineliminabile presenza di \emph{risvegli spuri} (\emph{spurious wakeup}), a causa dei quali la \code|wait()| potrebbe terminare e restituire il controllo al chiamante senza alcun apparente motivo (e quindi senza che l'evento sia stato effettivamente segnalato).
+
+
+\part*{Seconda parte}
+\addcontentsline{toc}{part}{Seconda parte}
+\section{\textsl{Specifiche}}
+
+\begingroup
+\slshape
+Scegliere uno fra i vari problemi di sincronizzazione visti anche a lezione e che preveda soluzioni diverse a seconda della semantica della signal utilizzata. Quindi, risolvere il problema utilizzando il meccanismo implementato nella prima parte del progetto. Successivamente, risolvere lo stesso problema utilizzando però gli strumenti di sincronizzazione offerti dalle versioni più recenti di Java (\code|Lock|, variabili \code|Condition| e i metodi \code|await()|, \code|signal()| e \code|signalAll()|) che utilizzano la semantica \emph{signal-and-continue}, e verificare come deve essere modificata la soluzione rispetto a quella che utilizza il meccanismo di sincronizzazione implementato nel progetto.
+\endgroup
+
+
+\section{Presentazione dei test}
+
+Tutti i test sono stati eseguiti con una versione leggermente modificata delle classi presentate nei paragrafi precedenti. In particolare, è stato fatto uso del costrutto \code|assert| (introdotto in Java 1.4) e sono state aggiunte istruzioni per mostrare alcune informazioni di debug (sfruttando la funzionalità di una semplice classe \code|Logger|, scritta appositamente, di produrre lo \emph{stack-trace}). Per comodità, tali modifiche alle classi \code|FairLock| e \code|Condition| sono evidenziate (usando il formato \texttt{diff}) in coda a questo documento nei listati~\ref{lst:fairlock-test} e \ref{lst:condition-test}.
+
+I test sono stati effettuati sia usando una classica mailbox, con un numero variabile di thread produttori e thread consumatori, sia uno “scambiatore”, così come presentato alla soluzione dell'esercizio E2.2.\footnote{Tale soluzione è disponibile all'indirizzo \url{http://www.ateneonline.it/ancilotti2e/studenti/isbn6358-0_E2.2.pdf}.}
+
+Per quanto riguarda la mailbox, l'unica differenza tra la soluzione che fa uso della classe \code|FairLock| e la soluzione che si affida al \code|ReentrantLock|, e agli altri strumenti offerti dalle versioni recenti di Java, è l'uso dell'istruzione \code|if| in luogo del ciclo \code|while|.
+
+La classe “scambiatore”, invece, può giovarsi meglio delle variabili condizione implementate secondo la semantica \emph{signal-and-urgent-wait}. Nei listati~\ref{lst:scambiatoreconfairlock} e~\ref{lst:scambiatoreconjavalock} sono presentate le soluzioni in entrambi i casi.
+
+\lstinputlisting[
+  float=tb, caption={Un esempio di uso della classe \texttt{FairLock}: implementazione di uno “scambiatore” per semantica \emph{signal-and-urgent-wait}},
+  basicstyle=\ttfamily\footnotesize, label={lst:scambiatoreconfairlock},
+]{../src/tests/ScambiatoreConFairLock.java}
+
+\lstinputlisting[
+  float=tb, caption={L'esempio dello “scambiatore” usando gli strumenti offerti dalle versioni recenti di Java (\texttt{ReentrantLock})},
+  basicstyle=\ttfamily\footnotesize, label={lst:scambiatoreconjavalock},
+]{../src/tests/ScambiatoreConJavaLock.java}
+\renewcommand{\topfraction}{0.9}
+
+L'elenco seguente schematizza l'intera organizzazione dei sorgenti in \emph{package} e riassume lo scopo di ciascun file:
+%
+\begin{itemize}
+\item Package \file{tests}\par
+Contiene le classi dei test.
+\begin{itemize}
+\item \file{IMailbox.java}\par
+Rappresenta l'interfaccia di una generica mailbox.
+\item \file{MailboxWithJavaLock.java}\par
+Realizza una mailbox che fa uso del \code|ReentrantLock| di Java e implementa l'interfaccia \code|IMailbox|.
+\item \file{MailboxWithFairLock.java}\par
+Realizza una mailbox che fa uso del \code|FairLock| e implementa \code|IMailbox|.
+\item \file{MailboxProducer.java}\par
+Implementa un thread produttore di una \code|IMailbox|.
+\item \file{MailboxConsumer.java}\par
+Implementa un thread consumatore di una \code|IMailbox|.
+\item \file{IScambiatore.java}\par
+Rappresenta l'interfaccia di uno “scambiatore”.
+\item \file{ScambiatoreConJavaLock.java}\par
+Realizza uno “scambiatore” che fa uso del \code|ReentrantLock| di Java e implementa l'interfaccia \code|IScambiatore|.
+\item \file{ScambiatoreConFairLock.java}\par
+Realizza uno “scambiatore” che fa uso del \code|FairLock| e implementa l'interfaccia \code|IScambiatore|.
+\item \file{ScambiatoreThread.java}\par
+Implementa un thread che richiede uno scambio a un \code|IScambiatore|.
+\item \file{Logger.java}\par
+Classe di utilità, permette di mostrare a video lo \emph{stack-trace} (usata per motivi di debugging).
+\item \file{Main.java}\par
+Contiene il metodo \code|main|.
+\end{itemize}
+
+\item Package \file{tests.fairlock}\par
+Contiene le versioni delle classi usate per i test.
+\begin{itemize}
+\item \file{FairLock.java}
+\item \file{Condition.java}
+\item \file{QueueNode.java}
+\end{itemize}
+\end{itemize}
+
+
+\immediate\write18{git diff ../src/fairlock/FairLock.java ../src/tests/fairlock/FairLock.java > FairLock.diff}
+\immediate\write18{git diff ../src/fairlock/Condition.java ../src/tests/fairlock/Condition.java > Condition.diff}
+
+\lstinputlisting[
+  float=tbp, caption={Modifiche alla classe \texttt{FairLock} usata per i test},
+  label={lst:fairlock-test}, language=diff,
+]{FairLock.diff}
+
+\lstinputlisting[
+  float=tbp, caption={Modifiche alla classe \texttt{Condition} usata per i test},
+  label={lst:condition-test}, language=diff,
+]{Condition.diff}
+
+\end{document}
