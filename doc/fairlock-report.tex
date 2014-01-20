@@ -391,8 +391,8 @@ Contiene le versioni delle classi usate per i test.
 \end{itemize}
 
 
-\immediate\write18{git diff ../src/fairlock/FairLock.java ../src/tests/fairlock/FairLock.java > FairLock.diff}
-\immediate\write18{git diff ../src/fairlock/Condition.java ../src/tests/fairlock/Condition.java > Condition.diff}
+\immediate\write18{git diff --no-index ../src/fairlock/FairLock.java ../src/tests/fairlock/FairLock.java > FairLock.diff}
+\immediate\write18{git diff --no-index ../src/fairlock/Condition.java ../src/tests/fairlock/Condition.java > Condition.diff}
 
 \lstinputlisting[
   float=tbp, caption={Modifiche alla classe \texttt{FairLock} usata per i test},
